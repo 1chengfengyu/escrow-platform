@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+      父 POM 是唯一决定 Spring 全家桶版本的地方。
+      3.5.x 是 17 号 JDK 上的稳定线；4.x 要求 JDK 21，且周边生态适配未完成，暂不升级。
+      relativePath 置空：强制从仓库拉父 POM，避免误用本地目录里的另一个 pom。
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.16</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.escrow</groupId>
+    <artifactId>escrow-platform</artifactId>
+    <version>1.0.0</version>
+    <name>escrow-platform</name>
+    <description>灵活用工任务结算与报酬托管平台</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <!-- Windows 控制台默认 GBK，源码统一按 UTF-8 编译，否则中文注释与常量会乱码 -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!--
+          手动锁定的版本：Boot BOM 不管 MyBatis-Plus，必须写死。
+          3.5.9 起分页拦截器拆到 mybatis-plus-jsqlparser，两者版本必须完全一致，
+          否则运行期 NoSuchMethodError。V0 无分页，故只引 starter，jsqlparser 留到 V2。
+        -->
+        <mybatis-plus.version>3.5.18</mybatis-plus.version>
+    </properties>
+
+    <!--
+      V5 起引入 SCA BOM：Nacos / Sentinel / Seata 的版本一律由它决定。
+      禁止在下面的依赖里写单个组件版本号——只写某一个的版本会造成 NoSuchMethodError。
+      本版只用到 nacos-client（配置中心），注册发现与 Sentinel 留到 V8 / 需要时。
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2025.0.0.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!--
+              V10 引入 Spring AI 1.1.8（BOM 统一管版本，下面不写单个组件版本）。
+              1.1.8 官方发布说明对齐 Spring Boot 3.5.15；本项目 3.5.16 在其补丁之上。
+              禁止升到 2.x：2.0 要求 Boot 4.1，与技术栈基线冲突。
+            -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>1.1.8</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- 定时任务分布式锁（V4 引入；版本手写，Boot BOM 不管理） -->
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-spring</artifactId>
+            <version>6.9.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.javacrumbs.shedlock</groupId>
+            <artifactId>shedlock-provider-jdbc-template</artifactId>
+            <version>6.9.0</version>
+        </dependency>
+        <!-- Web / 参数校验 / 健康检查：V0 的接口层与验收入口 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!--
+          安全骨架：V1 起引入，版本由 Boot BOM 管，禁止手写版本号。
+          V0 不引（Boot 默认过滤链会把 /actuator/health 拦成 401，见 docs/decisions.md #3）。
+          本卡只引 starter；会话进 Redis（spring-session-data-redis）是 v1-c4 的活，
+          提前引会让 mvn test 强依赖 Redis。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- 持久层：MyBatis-Plus 3.5.18（Boot 3 专用 starter） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+
+        <!-- 分页拦截器（docs/decisions.md #4）：3.5.9 起从 starter 拆出，版本必须与 starter 完全一致 -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+
+        <!-- MySQL 驱动：版本由 Boot BOM 管理，此处禁止写版本号 -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway：表结构唯一管理者，MySQL 方言需额外引 flyway-mysql -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
+        <!-- Redis 客户端：Boot 内置 Lettuce，禁止换成 Jedis；V0 只用于健康探针 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!--
+          本地缓存：任务详情三级缓存的 Caffeine 层（v2-c4）。
+          版本由 Boot BOM 管理，禁止手写版本号。
+        -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!--
+          配置中心客户端（V5，CR-13）：只用裸 nacos-client + 自定义刷新器，
+          不引 Spring Cloud（单体阶段没有注册发现与负载均衡的立足点）。
+          版本由上面的 SCA BOM 管，此处禁止写版本号。
+          escrow.nacos.enabled 默认 false：没有 Nacos 也能启动，失败自动降级为本地配置。
+        -->
+        <dependency>
+            <groupId>com.alibaba.nacos</groupId>
+            <artifactId>nacos-client</artifactId>
+        </dependency>
+
+        <!--
+          消息队列（V5 引入）：只承载非资金事件（站内信、运营统计）。
+          资金审计仍与业务同事务落 MySQL，不经 Kafka。
+          默认 escrow.notify.mode=log，无 broker 也能启动与跑测试。
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!--
+          报文归档（V6 引入）：对账通道报文与差异快照落 MongoDB。
+          版本由 Boot BOM 管理，禁止手写版本号。
+          escrow.recon.archive-mode 默认 log：没有 Mongo 也能启动与跑测试。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-mongodb</artifactId>
+        </dependency>
+
+        <!--
+          分布式会话：v1-c4 起登录态存 Redis（FR-ACCT.LOGIN.01），版本由 Boot BOM 管，禁止手写版本号。
+          classpath 上有本依赖时 Boot 自动选中 Redis 会话存储，因此不写 spring.session.store-type。
+        -->
+        <dependency>
+            <groupId>org.springframework.session</groupId>
+            <artifactId>spring-session-data-redis</artifactId>
+        </dependency>
+
+        <!--
+          V10 AI：只引模型客户端库，不引 spring-ai-starter-model-openai。
+          原因：starter 会带来自动配置，缺 api-key 时启动即失败，会让 813 个用例
+          与本地无 key 的启动全部变红。这里改为在 escrow.ai.mode=live 时手工构建
+          OpenAiApi / OpenAiChatModel，默认 stub 模式不触网。版本由 spring-ai-bom 管。
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-openai</artifactId>
+        </dependency>
+
+        <!-- Lombok：只允许用于 getter/setter/构造注入/日志，禁止 @Data 与 @Builder -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- 测试：JUnit5 + AssertJ + Mockito + MockMvc，版本由 Boot BOM 管理 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 可执行 jar：容器化部署时需要；exclude Lombok 避免打进运行时 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

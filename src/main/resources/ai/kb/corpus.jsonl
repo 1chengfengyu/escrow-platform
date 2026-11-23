@@ -1,0 +1,14 @@
+{"citationId":"KB-ESCROW-01","title":"托管规则","text":"任务发布后，平台会冻结雇主等额的托管资金。雇主验收通过后，托管资金才会解冻并进入结算流程。","source":"docs/01-SRS.md#托管"}
+{"citationId":"KB-PAYOUT-01","title":"打款时效","text":"验收通过后，平台在一个工作日内完成打款。遇节假日顺延，打款状态可在收支明细中查询。","source":"docs/01-SRS.md#打款"}
+{"citationId":"KB-FEE-01","title":"平台服务费","text":"平台按任务金额的百分之三收取服务费。服务费在结算时自动扣除，不向服务者另行收取。","source":"docs/01-SRS.md#结算"}
+{"citationId":"KB-ACCEPT-01","title":"验收时限","text":"雇主应在服务者提交交付物后七十二小时内完成验收。逾期未验收，系统自动验收通过。","source":"docs/01-SRS.md#验收"}
+{"citationId":"KB-DISPUTE-01","title":"争议处理","text":"双方对交付物有争议时，可在验收期内发起申诉。平台在收到申诉后四十八小时内介入处理。","source":"docs/00-业务需求.md#争议"}
+{"citationId":"KB-WITHDRAW-01","title":"提现规则","text":"余额可随时提现，单笔最低十元。提现申请在一个工作日内处理，提现手续费为零。","source":"docs/01-SRS.md#提现"}
+{"citationId":"KB-RECHARGE-01","title":"充值规则","text":"单笔充值上限为五万元。充值到账后仅可用于托管任务，不可直接提现。","source":"docs/01-SRS.md#充值"}
+{"citationId":"KB-QUAL-01","title":"资质要求","text":"发布任务的雇主需完成企业资质认证。服务者需提交实名信息后才能报名任务。","source":"docs/01-SRS.md#资质"}
+{"citationId":"KB-REVIEW-01","title":"评价规则","text":"任务完成后双方可互评，评分范围一至五颗星。评价在任务完成后七天内有效，逾期不可补评。","source":"docs/00-业务需求.md#评价"}
+{"citationId":"KB-TASK-01","title":"任务发布","text":"发布任务需填写任务标题、单价、名额与交付要求。单价以分为单位存储，展示时换算为元。","source":"docs/01-SRS.md#任务"}
+{"citationId":"KB-REFUND-01","title":"撤单退款","text":"任务无人报名前可随时撤单，托管资金全额退回。已有报名后撤单需与报名者协商一致。","source":"docs/01-SRS.md#退款"}
+{"citationId":"KB-BOUNTY-01","title":"名额规则","text":"任务名额满员后停止报名。名额未满时，雇主可延长报名截止时间。","source":"docs/01-SRS.md#名额"}
+{"citationId":"KB-LIMIT-01","title":"登录限制","text":"连续五次登录失败会锁定账号十五分钟。锁定期间无法登录，可稍后重试或联系客服。","source":"docs/01-SRS.md#登录"}
+{"citationId":"KB-DATA-01","title":"数据保留","text":"交易记录与聊天记录自任务完成起保留三年。超过保留期的数据将做匿名化处理。","source":"docs/02-技术栈基线.md#数据"}

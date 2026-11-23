@@ -1,0 +1,84 @@
+/*
+ * 设计 token
+ * 视觉唯一基准：docs/frontend/demo/pages/bright.html（明亮版，用户已确认）
+ * 主题：teal-on-paper，Manrope 字体，柔和阴影与低饱和底色
+ * 颜色不采用工具抽出的 teal：明亮版的纸色 + 单一强调色优先（工具规范 §4）
+ */
+:root {
+  /* 纸与墨 */
+  --paper: #fbf8f0;
+  --paper-2: #f4f1e8;
+  --raise: #fffdf7;
+  --ink: #171512;
+  --ink-2: #55504a;
+  /* 3.49:1 不足以承载说明文字（V12.1 视觉门），降到 5.06:1 */
+  --ink-3: #6f6a61;
+  --line: rgba(23, 21, 18, 0.16);
+  --line-strong: rgba(23, 21, 18, 0.34);
+
+  /* 强调色：只用一支；品牌黄只做素材取色 */
+  --accent: #e8462d;
+  --accent-deep: #b0321b;
+  --accent-line: rgba(176, 50, 27, 0.5);
+  --accent-ink: #ffffff;
+  --brand: #f5c400;
+
+  /* 氛围层微光 */
+  --glow-brand: rgba(245, 196, 0, 0.16);
+  --glow-accent: rgba(232, 70, 45, 0.07);
+  --glow-ink: rgba(23, 21, 18, 0.045);
+
+  /* 字族 */
+  --serif: "Newsreader", "Noto Serif SC", "Songti SC", "SimSun", Georgia, serif;
+  --sans: "Manrope", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* 字号 */
+  --fs-hero: clamp(40px, 5.4vw, 76px);
+  --fs-h1: clamp(30px, 3.4vw, 46px);
+  --fs-h2: clamp(24px, 2.6vw, 34px);
+  --fs-h3: 18px;
+  --fs-body: 15px;
+  --fs-sm: 13px;
+  --fs-xs: 11px;
+  --fs-mono: 11px;
+
+  /* 尺度 */
+  --container: 1320px;
+  --gut: 64px;
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 36px;
+  --space-6: 56px;
+  --space-7: 80px;
+
+  /* 动效 */
+  --ease: cubic-bezier(0.2, 0.6, 0.3, 1);
+  --ease-ui: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 620ms;
+
+  /* 阴影：只给浮起的纸卡，不给每张卡 */
+  --shadow-card: 0 26px 50px -30px rgba(23, 21, 18, 0.5);
+  --shadow-soft: 0 10px 30px -22px rgba(23, 21, 18, 0.55);
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --gut: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --gut: 18px;
+    --fs-body: 14.5px;
+  }
+}

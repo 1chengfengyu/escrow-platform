@@ -1,0 +1,10 @@
+{"userId":101,"skills":["短视频剪辑","拍摄"],"experienceYears":3,"expectedUnitPrice":45000,"location":"北京","weekendAvailable":true,"completedOrders":40,"ratingX100":470}
+{"userId":102,"skills":["短视频剪辑"],"experienceYears":1,"expectedUnitPrice":30000,"location":"北京","weekendAvailable":false,"completedOrders":18,"ratingX100":440}
+{"userId":103,"skills":["视频剪辑"],"experienceYears":5,"expectedUnitPrice":60000,"location":"上海","weekendAvailable":true,"completedOrders":55,"ratingX100":475}
+{"userId":104,"skills":["文案写作"],"experienceYears":2,"expectedUnitPrice":20000,"location":"北京","weekendAvailable":true,"completedOrders":30,"ratingX100":460}
+{"userId":105,"skills":["平面设计"],"experienceYears":4,"expectedUnitPrice":35000,"location":"杭州","weekendAvailable":false,"completedOrders":48,"ratingX100":465}
+{"userId":106,"skills":["编程开发"],"experienceYears":6,"expectedUnitPrice":90000,"location":"深圳","weekendAvailable":true,"completedOrders":60,"ratingX100":480}
+{"userId":107,"skills":["数据标注"],"experienceYears":1,"expectedUnitPrice":15000,"location":"成都","weekendAvailable":true,"completedOrders":12,"ratingX100":430}
+{"userId":108,"skills":["短视频剪辑","文案写作"],"experienceYears":2,"expectedUnitPrice":40000,"location":"北京","weekendAvailable":true,"completedOrders":25,"ratingX100":450}
+{"userId":109,"skills":["拍摄"],"experienceYears":3,"expectedUnitPrice":50000,"location":"广州","weekendAvailable":true,"completedOrders":35,"ratingX100":455}
+{"userId":110,"skills":["客服"],"experienceYears":1,"expectedUnitPrice":12000,"location":"武汉","weekendAvailable":false,"completedOrders":20,"ratingX100":435}

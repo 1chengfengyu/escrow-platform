@@ -1,0 +1,5 @@
+# v2-c5 集成测试配置：只在 ESCROW_IT=true 时由 @ActiveProfiles("test") 加载
+# 永远指向独立的 escrow_test，不指向 escrow（project_rules §4）
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${TEST_DB_NAME:escrow_test}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=DISABLED&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true

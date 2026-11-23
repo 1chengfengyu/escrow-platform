@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.escrow.platform.task.infrastructure.mapper.TaskMapper">
+
+    <select id="selectTaskPage"
+            resultType="com.escrow.platform.task.infrastructure.mapper.TaskListItemRow">
+        SELECT t.id,
+               t.title,
+               t.category,
+               t.unit_price,
+               t.work_location,
+               t.start_time,
+               t.end_time,
+               t.published_at,
+               (SELECT COUNT(*) FROM task_slot s
+                 WHERE s.task_id = t.id AND s.status = 'SLOT_AVAILABLE') AS remaining_slots,
+               CASE WHEN EXISTS (SELECT 1 FROM task_slot sa
+                                  WHERE sa.task_id = t.id AND sa.status = 'SLOT_PENDING_ARBITRATION')
+                    THEN 1 ELSE 0 END AS has_settlement_abnormal,
+               0 AS has_open_dispute
+          FROM task t
+         WHERE t.published_at IS NOT NULL
+           AND t.recruiting_closed = 0
+           AND EXISTS (SELECT 1 FROM task_slot s2
+                        WHERE s2.task_id = t.id AND s2.status = 'SLOT_AVAILABLE')
+        <if test="c.keyword != null">
+           AND (t.title LIKE CONCAT('%', #{c.keyword}, '%')
+                OR t.description LIKE CONCAT('%', #{c.keyword}, '%'))
+        </if>
+        <if test="c.category != null">
+           AND t.category = #{c.category}
+        </if>
+        <if test="c.minPrice != null">
+           AND t.unit_price &gt;= #{c.minPrice}
+        </if>
+        <if test="c.maxPrice != null">
+           AND t.unit_price &lt;= #{c.maxPrice}
+        </if>
+        <if test="c.from != null">
+           AND t.end_time &gt;= #{c.from}
+        </if>
+        <if test="c.to != null">
+           AND t.start_time &lt;= #{c.to}
+        </if>
+        <if test="c.location != null">
+           AND t.work_location LIKE CONCAT('%', #{c.location}, '%')
+        </if>
+        <choose>
+            <when test="c.sort.name() == 'UNIT_PRICE'">
+                <choose>
+                    <when test="c.order.name() == 'ASC'">ORDER BY t.unit_price ASC, t.id DESC</when>
+                    <otherwise>ORDER BY t.unit_price DESC, t.id DESC</otherwise>
+                </choose>
+            </when>
+            <otherwise>
+                <choose>
+                    <when test="c.order.name() == 'ASC'">ORDER BY t.published_at ASC, t.id DESC</when>
+                    <otherwise>ORDER BY t.published_at DESC, t.id DESC</otherwise>
+                </choose>
+            </otherwise>
+        </choose>
+    </select>
+</mapper>

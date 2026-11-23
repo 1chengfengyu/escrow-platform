@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  V1 日志配置（v1-c6）：两层脱敏中的第一层——日志层。
+
+  核心只有一句：pattern 里不再使用 %msg，改用自定义的 %maskedMsg。
+  于是无论谁在代码里写了明文手机号 / 证件号 / 银行卡号，进入输出前都会被
+  DesensitizingConverter 统一打码；「记得打码」不再依赖调用方的自觉（NFR-SEC.04）。
+
+  conversionRule 必须是 <configuration> 的直接子元素、且写在 appender 之前，
+  否则 Logback 会报 "no conversion class registered for conversion word"
+  并把 %maskedMsg 当字面量打进日志——脱敏静默失效，比报错更危险。
+-->
+<configuration>
+
+    <conversionRule conversionWord="maskedMsg"
+                    converterClass="com.escrow.platform.common.log.DesensitizingConverter"/>
+
+    <!-- 控制台：本机演示与 IDE 查看 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!--
+              %X{traceId:-} 的「:-」不能省（docs/decisions.md #43）：没有 MDC 时输出空串，
+              不写的话日志里会出现 %X{traceId} 原文。
+            -->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{40} - %maskedMsg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!--
+      文件：脚本 scripts/demo-v1.ps1 的第 4 条演示要 grep 它。
+      单文件 50MB、保留 7 天：V1 演示数据量下足够，也不会在 VM 磁盘上失控。
+    -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/escrow-platform.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/escrow-platform.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{40} - %maskedMsg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

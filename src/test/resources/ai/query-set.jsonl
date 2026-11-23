@@ -1,0 +1,30 @@
+{"query":"找个会剪短视频的，周末能干活，预算 500 以内","expected":{"skill":"短视频剪辑","priceMax":50000,"location":null,"weekend":true,"headcount":null}}
+{"query":"需要视频剪辑，预算 800 元以内","expected":{"skill":"视频剪辑","priceMax":80000,"location":null,"weekend":null,"headcount":null}}
+{"query":"找位文案写作，北京，预算 300 以内","expected":{"skill":"文案写作","priceMax":30000,"location":"北京","weekend":null,"headcount":null}}
+{"query":"平面设计，杭州，周末能接单","expected":{"skill":"平面设计","priceMax":null,"location":"杭州","weekend":true,"headcount":null}}
+{"query":"需要编程开发，深圳，预算 900 元以下","expected":{"skill":"编程开发","priceMax":90000,"location":"深圳","weekend":null,"headcount":null}}
+{"query":"数据标注，成都，要 2 人","expected":{"skill":"数据标注","priceMax":null,"location":"成都","weekend":null,"headcount":2}}
+{"query":"找客服，武汉，预算 150 以内","expected":{"skill":"客服","priceMax":15000,"location":"武汉","weekend":null,"headcount":null}}
+{"query":"需要拍摄，广州，周末，3 人","expected":{"skill":"拍摄","priceMax":null,"location":"广州","weekend":true,"headcount":3}}
+{"query":"直播带货，郑州，预算 600 以内","expected":{"skill":"直播","priceMax":60000,"location":"郑州","weekend":null,"headcount":null}}
+{"query":"翻译，南京，预算 200 以内","expected":{"skill":"翻译","priceMax":20000,"location":"南京","weekend":null,"headcount":null}}
+{"query":"剪片，北京，周末能干活","expected":{"skill":"视频剪辑","priceMax":null,"location":"北京","weekend":true,"headcount":null}}
+{"query":"写文案，上海，预算 250 以内","expected":{"skill":"文案写作","priceMax":25000,"location":"上海","weekend":null,"headcount":null}}
+{"query":"设计海报，杭州，周末，预算 400 以内","expected":{"skill":"平面设计","priceMax":40000,"location":"杭州","weekend":true,"headcount":null}}
+{"query":"写代码，深圳，预算 1000 以内","expected":{"skill":"编程开发","priceMax":100000,"location":"深圳","weekend":null,"headcount":null}}
+{"query":"短视频剪辑，苏州，5 人","expected":{"skill":"短视频剪辑","priceMax":null,"location":"苏州","weekend":null,"headcount":5}}
+{"query":"需要摄影，西安，周末能接单","expected":{"skill":"拍摄","priceMax":null,"location":"西安","weekend":true,"headcount":null}}
+{"query":"标注，重庆，预算 120 以内","expected":{"skill":"数据标注","priceMax":12000,"location":"重庆","weekend":null,"headcount":null}}
+{"query":"客服，天津，双休，2 人","expected":{"skill":"客服","priceMax":null,"location":"天津","weekend":true,"headcount":2}}
+{"query":"平面设计，北京，预算 500 以内，周末","expected":{"skill":"平面设计","priceMax":50000,"location":"北京","weekend":true,"headcount":null}}
+{"query":"需要视频剪辑，广州，预算 350 以下","expected":{"skill":"视频剪辑","priceMax":35000,"location":"广州","weekend":null,"headcount":null}}
+{"query":"找会拍摄的，成都，预算 450 以内","expected":{"skill":"拍摄","priceMax":45000,"location":"成都","weekend":null,"headcount":null}}
+{"query":"文案写作，深圳，周末，预算 300 以内","expected":{"skill":"文案写作","priceMax":30000,"location":"深圳","weekend":true,"headcount":null}}
+{"query":"数据标注，杭州，周末能干活","expected":{"skill":"数据标注","priceMax":null,"location":"杭州","weekend":true,"headcount":null}}
+{"query":"编程开发，北京，预算 1200 以内","expected":{"skill":"编程开发","priceMax":120000,"location":"北京","weekend":null,"headcount":null}}
+{"query":"直播，武汉，预算 180 以内，周末","expected":{"skill":"直播","priceMax":18000,"location":"武汉","weekend":true,"headcount":null}}
+{"query":"翻译，上海，3 人","expected":{"skill":"翻译","priceMax":null,"location":"上海","weekend":null,"headcount":3}}
+{"query":"短视频剪辑，重庆，预算 280 以内","expected":{"skill":"短视频剪辑","priceMax":28000,"location":"重庆","weekend":null,"headcount":null}}
+{"query":"需要平面设计，成都，周末","expected":{"skill":"平面设计","priceMax":null,"location":"成都","weekend":true,"headcount":null}}
+{"query":"客服，西安，预算 100 以内","expected":{"skill":"客服","priceMax":10000,"location":"西安","weekend":null,"headcount":null}}
+{"query":"拍摄，北京，周末，预算 800 以内","expected":{"skill":"拍摄","priceMax":80000,"location":"北京","weekend":true,"headcount":null}}

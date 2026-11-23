@@ -1,0 +1,133 @@
+# V0 配置：只保证「能启动 + 能连 MySQL/Redis + Flyway 能建表」。
+# 所有与环境相关的值一律走占位符，真实值放本地 application-local.yml（已 gitignore），
+# 禁止把内网 IP、密码写进本文件。
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: escrow-platform
+  # 本地默认 dev：/api/ping/boom 这个必抛异常的验收入口只在 dev profile 下注册（docs/decisions.md #32）。
+  # 部署到任何共享环境必须用 SPRING_PROFILES_ACTIVE 覆盖，不能吃默认值。
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # MongoDB 只在归档模式为 mongo 时才需要（V6，escrow.recon.archive-mode）。
+  # 默认 log 模式下若照常加载自动配置，即使不写 Mongo 也会创建客户端并每 30 秒试连
+  # 127.0.0.1:27017，导致 /actuator/health 被拖到 30 秒并返回 503。
+  # 启用归档时追加 mongo profile（application-mongo.yml 会把这里的排除项清空）。
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.mongo.MongoRepositoriesAutoConfiguration
+      - org.springframework.boot.actuate.autoconfigure.mongo.MongoHealthContributorAutoConfiguration
+
+  # 数据源：占位符默认指向本机回环地址，VM 的真实 IP 只在本地 profile 里给。
+# 默认口令一律 dev_ 前缀（本地演示值，与 docker-compose.yml 的兜底值一致）；
+# 真实值走 .env 或环境变量，不写进本文件。
+  datasource:
+    url: jdbc:mysql://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:escrow}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&sslMode=DISABLED&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USERNAME:escrow}
+    password: ${DB_PASSWORD:dev_escrow}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # Redis：仅会话/限流/缓存/锁，不承载账务
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:dev_redis}
+      timeout: 2s
+    # 报文归档（V6）：只有 escrow.recon.archive-mode=mongo 时才真正写入
+    mongodb:
+      uri: ${MONGO_URI:mongodb://127.0.0.1:27017/escrow}
+
+  # 会话：存 Redis，有效期 24 小时（FR-ACCT.LOGIN.01）。
+  # 不写 store-type：classpath 有 spring-session-data-redis 时 Boot 自动选 Redis 存储。
+  session:
+    timeout: 24h
+    redis:
+      namespace: escrow:session
+
+  # 表结构只由 Flyway 管；clean 永久禁用，防止误清库
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    # 0 而不是 1：基线版本为 0 时，V1 及后续脚本仍会执行；写 1 会把 V1 当成"已执行"直接跳过
+    baseline-version: 0
+    clean-disabled: true
+    encoding: UTF-8
+
+  jackson:
+    time-zone: Asia/Shanghai
+
+# MyBatis-Plus：下划线转驼峰；主键为雪花 ID（assign_id），DDL 里禁止写 AUTO_INCREMENT
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+
+# 健康检查：只暴露 health 与 info，绝不写 *（/actuator/env 会吐数据库密码）
+management:
+  info:
+    env:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# 构建产物自证版本：@project.version@ 由 Maven 资源过滤替换（docs/decisions.md #16）
+info:
+  app:
+    name: @project.name@
+    version: @project.version@
+
+# V2 资金与任务到期配置（v2-c5）
+escrow:
+  fee:
+    # 服务费率快照（万分数）：300 = 3%。发布时写入 task.fee_rate 与 fund_escrow_order.fee_rate，
+    # 之后调价不影响已发布任务。费率不能由请求方决定（用户裁决 5A）。
+    rate: ${ESCROW_FEE_RATE:300}
+  task:
+    # 到期扫描间隔与首轮延迟（毫秒）；V2 单实例，未引 ShedLock。
+    # 间隔默认 1 小时，与 SRS 的「每小时扫描」对齐（v2-c6）；演示时可用环境变量临时调小。
+    expiry-scan-interval-ms: ${ESCROW_TASK_EXPIRY_SCAN_INTERVAL_MS:3600000}
+    expiry-scan-initial-delay-ms: ${ESCROW_TASK_EXPIRY_SCAN_INITIAL_DELAY_MS:10000}
+  recon:
+    # 对账报文归档模式（V6）：log = 只写日志（默认，无需 Mongo）；mongo = 落 MongoDB
+    archive-mode: ${ESCROW_RECON_ARCHIVE_MODE:log}
+  # V10 AI：默认 stub，不联网、无 key 也能启动与跑全量测试
+  ai:
+    # stub = 规则解析 + 模板理由 + 词法检索；live = 走 Spring AI 调真实模型
+    mode: ${ESCROW_AI_MODE:stub}
+    # 默认指向 DeepSeek 的 OpenAI 兼容端点。不要改回 api.openai.com：
+    # 该域名在部分网络下必然超时，live 模式下每段 stage 都会等满超时再降级
+    base-url: ${ESCROW_AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${ESCROW_AI_API_KEY:}
+    model: ${ESCROW_AI_MODEL:deepseek-chat}
+    fallback-models: ${ESCROW_AI_FALLBACK_MODELS:}
+    # 日成本是否落 ai_cost_daily（跨重启、跨实例）；写库失败自动降级为进程内记账
+    cost-persist: ${ESCROW_AI_COST_PERSIST:true}
+    # live 启动时探测接入点可达性（3 秒超时），不通直接启动失败，避免运行期每次等超时
+    startup-probe: ${ESCROW_AI_STARTUP_PROBE:true}
+    # 日 token 预算与各阶段预算；超限自动降级到离线路径，不报错
+    daily-token-budget: ${ESCROW_AI_DAILY_TOKEN_BUDGET:200000}
+    stage-token-budget:
+      understand: ${ESCROW_AI_UNDERSTAND_TOKENS:1200}
+      rerank: ${ESCROW_AI_RERANK_TOKENS:1600}
+      generate: ${ESCROW_AI_GENERATE_TOKENS:1200}
+    # 同一 prompt 版本的查询缓存（秒）
+    query-cache-ttl-seconds: ${ESCROW_AI_QUERY_CACHE_TTL:300}
+    rank:
+      # 全局基线策略：WEIGHTED = 只用确定性融合分；RERANK = 强制全量重排
+      strategy: ${ESCROW_AI_RANK_STRATEGY:WEIGHTED}
+      # 灰度比例，万分比整数：0 = 全 WEIGHTED，10000 = 全 RERANK，1000 = 10%
+      gray-ratio: ${ESCROW_AI_RANK_GRAY_RATIO:0}
+      # 模型重排与确定性排序的位移守卫：任一候选人位移超过该值即丢弃重排
+      deviation-guard: ${ESCROW_AI_RANK_DEVIATION_GUARD:5}

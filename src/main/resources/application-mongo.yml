@@ -1,0 +1,15 @@
+# MongoDB 归档 profile（V6，对账报文归档到 Mongo）。
+#
+# 用法：SPRING_PROFILES_ACTIVE=dev,mongo（mongo 必须放在最后，靠它覆盖基础配置里的排除项）。
+# 前提：docker compose --profile core --profile v6 up -d 已启动 mongo 容器。
+#
+# 基础 application.yml 默认排除 Mongo 自动配置，让 log 模式下完全不碰 Mongo；
+# 这里把排除项清空（空列表覆盖），恢复自动配置，并切到 mongo 归档模式。
+
+spring:
+  autoconfigure:
+    exclude: []
+
+escrow:
+  recon:
+    archive-mode: mongo

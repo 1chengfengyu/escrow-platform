@@ -1,0 +1,158 @@
+# 本地开发中间件编排：core = MySQL 8.0.42 + Redis 7.4；kafka = KRaft 单节点（V8）；
+# v6 = MongoDB 7（对账报文归档）。
+# 应用跑在 Windows 侧（docs/decisions.md D-04）。
+#
+# 启停：docker compose --profile core up -d
+#       docker compose --profile core --profile kafka up -d      # V8 起需要异步站内信时
+#       docker compose --profile core --profile v6 up -d         # V6 起需要 Mongo 归档时
+# 重置：docker compose down -v     # 只有 -v 才删数据卷；不带 -v 数据还在
+#
+# 口令全部走 .env（见 .env.example）。不建 .env 时用下面的演示默认值，
+# 默认值统一 dev_ 前缀，一眼能看出"这不是生产口令"。
+
+name: escrow-platform
+
+services:
+  mysql:
+    image: mysql:8.0.42
+    container_name: escrow-mysql
+    profiles: ["core"]
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev_root}
+      TZ: Asia/Shanghai
+    ports:
+      # 绑 0.0.0.0 的前提是 VM 网卡为 NAT/Host-Only（docs/decisions.md #27）。
+      # 要更严就改成 "127.0.0.1:3306:3306" 并在 Windows 侧开 SSH 隧道。
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/conf.d/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      # initdb 只在数据卷为空时执行一次，改了脚本必须 down -v 重建
+      - ./docker/mysql/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-dev_root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: escrow-redis
+    profiles: ["core"]
+    restart: unless-stopped
+    # 口令不进仓库：redis.conf 里不写 requirepass，由这里从 .env 注入
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --requirepass
+      - ${REDIS_PASSWORD:-dev_redis}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-dev_redis}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # 站内信异步投递（V8）：KRaft 单节点，无 Zookeeper。
+  # 只在 --profile kafka 下启动；不启时应用走默认 log 模式，行为与 V7 完全一致。
+  # advertised listener 必须是 Windows 侧能连到的地址，默认回环；VM 上用 .env 的
+  # KAFKA_ADVERTISED_HOST 覆盖成虚拟机 IP（本地值，不入库）。
+  kafka:
+    image: apache/kafka:3.9.1
+    container_name: escrow-kafka
+    profiles: ["kafka"]
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${KAFKA_ADVERTISED_HOST:-127.0.0.1}:9092,INTERNAL://localhost:29092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@127.0.0.1:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # 堆上限必须写死，否则 JVM 按宿主机内存自动算会把 6 GB 的 VM 撑爆
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      # 容器内走 INTERNAL 监听器：PLAINTEXT 广播的是宿主机 IP（VM 上容器回连不到）
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:29092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  # 配置中心（V5）：单机 derby 存储，只做「打款运行期参数」的在线调整。
+  # 不启时应用读本地 application.yml，行为与 V4 一致（escrow.nacos.enabled=false）。
+  # 单机模式必须写死堆上限：默认按宿主机内存算，6 GB 的 VM 会被撑爆。
+  nacos:
+    image: nacos/nacos-server:v3.0.3
+    container_name: escrow-nacos
+    profiles: ["v5"]
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      # 本地演示不开启鉴权；公网部署必须打开并配置 token
+      NACOS_AUTH_ENABLE: "false"
+      # 3.x 即使关闭鉴权也强制要求这三个变量存在，缺一个直接 exit 255。
+      # 下面是官方文档的演示默认值，不是真实凭据；公网部署必须换成自己的随机值并放 .env。
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-SecretKey012345678901234567890123456789012345678901234567890123456789}
+      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-nacos}
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-nacos}
+      TZ: Asia/Shanghai
+    ports:
+      - "8848:8848"
+      # 3.x 客户端走 gRPC，9848 必须一起映射，否则 Windows 侧连上后立刻断开
+      - "9848:9848"
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8848/nacos/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  # 对账报文归档（V6）：只存通道报文与差异快照，不承载账务。
+  # 缓存上限必须写死，否则 WiredTiger 按宿主机内存自动算，会把 6 GB 的 VM 撑爆。
+  mongo:
+    image: mongo:7
+    container_name: escrow-mongo
+    profiles: ["v6"]
+    restart: unless-stopped
+    command: ["--wiredTigerCacheSizeGB", "0.25"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+# named volume 而不是 bind mount：bind 到 Windows 共享目录有权限与性能问题（docs/decisions.md #26）
+volumes:
+  mysql-data:
+  redis-data:
+  mongo-data:
+  kafka-data:
+  nacos-data:

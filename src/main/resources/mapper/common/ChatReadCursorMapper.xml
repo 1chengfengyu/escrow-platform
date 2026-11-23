@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.escrow.platform.common.chat.infrastructure.mapper.ChatReadCursorMapper">
+
+    <!-- 复合主键 upsert：GREATEST 保证游标只前进不回退，重复标记已读不报错。 -->
+    <insert id="upsert">
+        INSERT INTO chat_read_cursor (conversation_id, user_id, last_read_message_id)
+        VALUES (#{conversationId}, #{userId}, #{lastReadMessageId})
+        ON DUPLICATE KEY UPDATE last_read_message_id =
+            GREATEST(last_read_message_id, #{lastReadMessageId})
+    </insert>
+
+    <select id="selectLastReadMessageId" resultType="java.lang.Long">
+        SELECT last_read_message_id
+          FROM chat_read_cursor
+         WHERE conversation_id = #{conversationId}
+           AND user_id = #{userId}
+         LIMIT 1
+    </select>
+</mapper>

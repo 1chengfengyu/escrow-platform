@@ -1,0 +1,38 @@
+# 本地环境
+.env
+.env.local
+*.local.yml
+*.local.yaml
+application-local.yml
+application-local.yaml
+
+# 构建产物
+target/
+dist/
+build/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+*.war
+
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 日志与临时文件
+logs/
+tmp/
+work/
+*.log
+boot-*.log
+boot-*.err.log
+*.pid
+*.hprof
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

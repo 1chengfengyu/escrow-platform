@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.escrow.platform.common.chat.infrastructure.mapper.ChatConversationMapper">
+
+    <!-- 唯一键回查：撞键后取回既有会话，不做「先 SELECT 判断再 INSERT」。 -->
+    <select id="selectByUniqueKey"
+            resultType="com.escrow.platform.common.chat.domain.ChatConversation">
+        SELECT id,
+               scope,
+               task_id,
+               biz_id,
+               employer_id,
+               worker_id,
+               initiator_id,
+               status,
+               last_message_at,
+               created_at
+          FROM chat_conversation
+         WHERE scope = #{scope}
+           AND task_id = #{taskId}
+           AND biz_id = #{bizId}
+           AND employer_id = #{employerId}
+           AND worker_id = #{workerId}
+         LIMIT 1
+    </select>
+
+    <!-- 会话列表：按当前身份过滤，可选 scope；无消息的会话排在末尾。 -->
+    <select id="selectPageByIdentity"
+            resultType="com.escrow.platform.common.chat.domain.ChatConversation">
+        SELECT id,
+               scope,
+               task_id,
+               biz_id,
+               employer_id,
+               worker_id,
+               initiator_id,
+               status,
+               last_message_at,
+               created_at
+          FROM chat_conversation
+        <where>
+            <choose>
+                <when test="asEmployer">
+                    employer_id = #{userId}
+                </when>
+                <otherwise>
+                    worker_id = #{userId}
+                </otherwise>
+            </choose>
+            <if test="scope != null">
+                AND scope = #{scope}
+            </if>
+        </where>
+         ORDER BY last_message_at DESC, id DESC
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByIdentity" resultType="long">
+        SELECT COUNT(*)
+          FROM chat_conversation
+        <where>
+            <choose>
+                <when test="asEmployer">
+                    employer_id = #{userId}
+                </when>
+                <otherwise>
+                    worker_id = #{userId}
+                </otherwise>
+            </choose>
+            <if test="scope != null">
+                AND scope = #{scope}
+            </if>
+        </where>
+    </select>
+
+    <!-- 归档只改 OPEN：重复触发返回 0 行，不报错。 -->
+    <update id="archiveByTaskId">
+        UPDATE chat_conversation
+           SET status = 'ARCHIVED'
+         WHERE task_id = #{taskId}
+           AND status = 'OPEN'
+    </update>
+
+    <update id="updateLastMessageAt">
+        UPDATE chat_conversation
+           SET last_message_at = #{lastMessageAt}
+         WHERE id = #{id}
+    </update>
+</mapper>

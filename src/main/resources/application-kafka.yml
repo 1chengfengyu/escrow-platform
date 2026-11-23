@@ -1,0 +1,38 @@
+# Kafka profile（V8，站内信异步投递）。
+#
+# 用法：SPRING_PROFILES_ACTIVE=dev,kafka，且 docker compose --profile kafka up -d 已启动 broker。
+# 不激活本 profile 时 escrow.notify.mode 缺省为 log：同步打日志 + 写收件箱，不碰 Kafka。
+#
+# producer 参数不是调优，是正确性前提：
+#   max.in.flight.requests.per.connection=1 + enable.idempotence=true → 分区内保序且不重复；
+#   delivery.timeout.ms=5000 让 broker 挂掉时 afterCommit 线程最多等 5 秒，
+#   默认 120 秒会把打款事务的提交回调卡两分钟；
+#   delivery.timeout.ms 必须 >= linger.ms + request.timeout.ms（Kafka 启动硬校验），
+#   所以 request.timeout.ms 一并下调到 3000，否则应用启动即失败。
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:127.0.0.1:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+        delivery.timeout.ms: 5000
+        request.timeout.ms: 3000
+        linger.ms: 0
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+
+escrow:
+  notify:
+    mode: kafka
+    # 消费者组与死信消费者组前缀（NotificationConsumer 用的是这个键）
+    group: escrow-notify

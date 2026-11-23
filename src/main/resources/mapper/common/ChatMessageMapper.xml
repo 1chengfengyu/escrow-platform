@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.escrow.platform.common.chat.infrastructure.mapper.ChatMessageMapper">
+
+    <!-- 正序分页：created_at 有毫秒精度，同毫秒用 id 兜底，避免翻页抖动。 -->
+    <select id="selectPageAsc"
+            resultType="com.escrow.platform.common.chat.domain.ChatMessage">
+        SELECT id,
+               conversation_id,
+               sender_id,
+               msg_type,
+               content,
+               contact_hint,
+               created_at
+          FROM chat_message
+         WHERE conversation_id = #{conversationId}
+         ORDER BY created_at ASC, id ASC
+         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 短轮询增量：只取 afterId 之后的消息，不重放历史。 -->
+    <select id="selectAfterId"
+            resultType="com.escrow.platform.common.chat.domain.ChatMessage">
+        SELECT id,
+               conversation_id,
+               sender_id,
+               msg_type,
+               content,
+               contact_hint,
+               created_at
+          FROM chat_message
+         WHERE conversation_id = #{conversationId}
+           AND id &gt; #{afterId}
+         ORDER BY created_at ASC, id ASC
+         LIMIT #{limit}
+    </select>
+
+    <!-- 单会话未读：游标不存在按 0 处理；自己发的消息不计未读。 -->
+    <select id="countUnread" resultType="long">
+        SELECT COUNT(*)
+          FROM chat_message m
+         WHERE m.conversation_id = #{conversationId}
+           AND m.sender_id &lt;&gt; #{userId}
+           AND m.id &gt; COALESCE((SELECT r.last_read_message_id
+                                    FROM chat_read_cursor r
+                                   WHERE r.conversation_id = #{conversationId}
+                                     AND r.user_id = #{userId}), 0)
+    </select>
+
+    <!-- 未读总数：按当前身份取会话，再按各自游标累计。 -->
+    <select id="countUnreadTotal" resultType="long">
+        SELECT COUNT(*)
+          FROM chat_message m
+          JOIN chat_conversation c
+            ON c.id = m.conversation_id
+          LEFT JOIN chat_read_cursor r
+            ON r.conversation_id = m.conversation_id
+           AND r.user_id = #{userId}
+         WHERE m.sender_id &lt;&gt; #{userId}
+           AND m.id &gt; COALESCE(r.last_read_message_id, 0)
+        <choose>
+            <when test="asEmployer">
+                AND c.employer_id = #{userId}
+            </when>
+            <otherwise>
+                AND c.worker_id = #{userId}
+            </otherwise>
+        </choose>
+    </select>
+
+    <!-- 标记已读时把游标推到会话当前最大消息 ID。 -->
+    <select id="selectMaxId" resultType="java.lang.Long">
+        SELECT MAX(id)
+          FROM chat_message
+         WHERE conversation_id = #{conversationId}
+    </select>
+</mapper>

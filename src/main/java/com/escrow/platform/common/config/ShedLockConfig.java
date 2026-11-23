@@ -1,0 +1,50 @@
+package com.escrow.platform.common.config;
+
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
+import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+
+/**
+ * ShedLock 配置（FR-JOB.LOCK.01，V4 引入）。
+ *
+ * <p>锁表 {@code shedlock} 由 Flyway {@code V11__v4_shedlock.sql} 创建。
+ * 使用数据库时间 {@code usingDbTime()}，避免多实例时钟漂移导致早解锁。</p>
+ *
+ * @since V4
+ */
+@Configuration
+@EnableSchedulerLock(defaultLockAtMostFor = "PT10M")
+public class ShedLockConfig {
+
+    /**
+     * JDBC 锁提供者。
+     *
+     * @param dataSource 数据源
+     * @return 锁提供者
+     */
+    @Bean
+    public LockProvider lockProvider(DataSource dataSource) {
+        return new JdbcTemplateLockProvider(JdbcTemplateLockProvider.Configuration.builder()
+                .withJdbcTemplate(new JdbcTemplate(dataSource))
+                .usingDbTime()
+                .build());
+    }
+
+    /**
+     * 按单据动态加锁的执行器（FR-JOB.LOCK.01：扫描不加锁，锁落在单据上）。
+     *
+     * @param lockProvider 锁提供者
+     * @return 锁执行器
+     */
+    @Bean
+    public LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+        return new DefaultLockingTaskExecutor(lockProvider);
+    }
+}
