@@ -50,7 +50,9 @@ jobs:
   integration:
     name: Integration tests (MySQL + Redis)
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # 不允许静默通过：集成测试失败必须让 CI 变红。
+    # 加 continue-on-error 时，job 挂了整条 workflow 仍然是绿的，
+    # 「1061 条全绿」这个结论就没有意义——它只证明单测绿，不证明资金链路绿。
     services:
       mysql:
         image: mysql:8.0.42
