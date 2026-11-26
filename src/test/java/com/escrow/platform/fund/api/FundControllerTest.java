@@ -28,6 +28,9 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -85,11 +88,12 @@ class FundControllerTest {
     @Test
     void rechargeShouldReturnNewBalance() throws Exception {
         loginAs(EMPLOYER);
-        when(fundAccountService.recharge(1001L, 5000L)).thenReturn(new FundBalanceView(5000L, 0L));
+        when(fundAccountService.recharge(eq(1001L), eq("rid-ctrl-1"), eq(5000L)))
+                .thenReturn(new FundBalanceView(5000L, 0L));
 
         mockMvc.perform(post("/api/fund/recharge")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":5000}"))
+                        .content("{\"amount\":5000,\"requestId\":\"rid-ctrl-1\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.available").value("5000"));
     }
@@ -98,12 +102,12 @@ class FundControllerTest {
     @Test
     void rechargeAboveLimitShouldReturn409() throws Exception {
         loginAs(EMPLOYER);
-        when(fundAccountService.recharge(anyLong(), anyLong()))
+        when(fundAccountService.recharge(anyLong(), anyString(), anyLong()))
                 .thenThrow(new ApiException(ErrorCode.RECHARGE_LIMIT_EXCEEDED, "充值金额超过单笔限额"));
 
         mockMvc.perform(post("/api/fund/recharge")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":5000001}"))
+                        .content("{\"amount\":5000001,\"requestId\":\"rid-ctrl-2\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RECHARGE_LIMIT_EXCEEDED"));
     }
@@ -115,9 +119,37 @@ class FundControllerTest {
 
         mockMvc.perform(post("/api/fund/recharge")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":null}"))
+                        .content("{\"amount\":null,\"requestId\":\"rid-ctrl-3\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
+    }
+
+    /** 缺少 requestId：400，不能漏到 Service 抛 IllegalArgumentException 变成 500。 */
+    @Test
+    void rechargeWithoutRequestIdShouldReturn400() throws Exception {
+        loginAs(EMPLOYER);
+
+        mockMvc.perform(post("/api/fund/recharge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":5000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
+
+        verifyNoInteractions(fundAccountService);
+    }
+
+    /** requestId 超过 biz_no 的 32 字符列宽：400，同上不进 Service。 */
+    @Test
+    void rechargeWithTooLongRequestIdShouldReturn400() throws Exception {
+        loginAs(EMPLOYER);
+
+        mockMvc.perform(post("/api/fund/recharge")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":5000,\"requestId\":\"" + "x".repeat(33) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"));
+
+        verifyNoInteractions(fundAccountService);
     }
 
     private static void loginAs(LoginUser principal) {

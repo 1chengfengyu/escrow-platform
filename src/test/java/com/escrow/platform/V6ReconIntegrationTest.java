@@ -215,7 +215,7 @@ class V6ReconIntegrationTest {
     }
 
     private Long publishTask() {
-        fundAccountService.recharge(OWNER_ID, 10_000L);
+        fundAccountService.recharge(OWNER_ID, "SETUP-" + System.nanoTime(), 10_000L);
         Task task = new Task();
         task.setEmployerId(OWNER_ID);
         task.setTitle("V6 对账测试任务-" + System.nanoTime());
