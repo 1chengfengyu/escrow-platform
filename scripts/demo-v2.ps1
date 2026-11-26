@@ -232,7 +232,7 @@ try {
         "status=$($review.Status) code=$($review.Json.code)"
 
     $recharge = Invoke-DemoRequest -Method POST -Path '/api/fund/recharge' `
-        -Body @{ amount = $RechargeAmount } -CookieFile $script:EmployerJar
+        -Body @{ amount = $RechargeAmount; requestId = [guid]::NewGuid().ToString('N') } -CookieFile $script:EmployerJar
     Write-Check ($recharge.Status -eq 200) '1.6 模拟充值' `
         "available=$($recharge.Json.data.available) frozen=$($recharge.Json.data.frozen)"
 

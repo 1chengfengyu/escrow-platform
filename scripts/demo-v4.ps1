@@ -248,7 +248,7 @@ try {
         "status=$($review.Status) code=$($review.Json.code)"
 
     $recharge = Invoke-DemoRequest -Method POST -Path '/api/fund/recharge' `
-        -Body @{ amount = $RechargeAmount } -CookieFile $script:EmployerJar
+        -Body @{ amount = $RechargeAmount; requestId = [guid]::NewGuid().ToString('N') } -CookieFile $script:EmployerJar
     Write-Check ($recharge.Status -eq 200 -and "$($recharge.Json.data.available)" -eq "$RechargeAmount") `
         '0.4 模拟充值 10000.00 元' "available=$($recharge.Json.data.available)"
 

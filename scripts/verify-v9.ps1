@@ -170,7 +170,7 @@ try {
     Write-Check ($review.Status -eq 200) '0.2 资质审核通过' "status=$($review.Status)"
 
     $recharge = Invoke-DemoRequest -BaseUrl $a -Method POST -Path '/api/fund/recharge' `
-        -Body @{ amount = $RechargeAmount } -CookieFile $employerJar
+        -Body @{ amount = $RechargeAmount; requestId = [guid]::NewGuid().ToString('N') } -CookieFile $employerJar
     Write-Check ("$($recharge.Json.data.available)" -eq "$RechargeAmount") `
         '0.3 充值 10000.00 元' "available=$($recharge.Json.data.available)"
 
