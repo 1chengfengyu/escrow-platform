@@ -263,6 +263,12 @@ public class FundAccountService {
             return balances(userId);
         }
 
+        // 余额变动的顺序与上面分录的顺序一致：先发行总额、后用户可用。
+        // 两者对齐后，读代码不必在「分录怎么记」和「余额怎么动」之间来回换算。
+        //
+        // 代价是所有充值都会先拿 ACC_ISSUED 这只系统账户的行锁，形成串行点。
+        // 充值不在高频路径上（V2 明确不做单日累计限额），这点争抢可以接受；
+        // 若将来充值变成热点，应改回「先用户、后系统」，让争抢落在用户各自的账户行上。
         increase(issued.getId(), amount);
         increase(avail.getId(), amount);
         fundLedgerGuard.assertBalanced("RECHARGE", "userId=" + userId);

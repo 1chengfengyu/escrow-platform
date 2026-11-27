@@ -178,6 +178,11 @@ public class JournalService {
      * <p>依赖驱动输出字符串是刻意的取舍：判错时后果是「本该幂等命中却抛异常」，
      * 用户看到一次 500，但事务回滚、余额不会被多加。为绕开这层依赖去改
      * {@code batch_no} 的生成规则，影响面远大于收益。</p>
+     *
+     * <p>失效方向是刻意选的：若将来升级 MySQL 驱动、或换库导致 message 格式变化，
+     * 症状会是「幂等命中变成 500」，而不是资金出错。前者是可见的、可修的，后者不是。
+     * 这也意味着这条判断必须配集成测试兜底（{@code RechargeIdempotencyIntegrationTest}），
+     * 否则驱动悄悄改格式时，只有线上重试才会暴露。</p>
      */
     private static boolean isBizKeyConflict(DuplicateKeyException e) {
         String message = e.getMessage();
