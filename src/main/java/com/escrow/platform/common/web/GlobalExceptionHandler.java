@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -142,6 +143,23 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupportedException(
             HttpRequestMethodNotSupportedException ex) {
         return build(ErrorCode.METHOD_NOT_ALLOWED, ErrorCode.METHOD_NOT_ALLOWED.getDefaultMessage());
+    }
+
+    /**
+     * 并发冲突：乐观锁版本冲突、死锁回滚、锁等待超时（FR-ESCROW.HOLD.04 ②，requirements.md:465）。
+     *
+     * <p>这条必须排在 {@link DataAccessException} 之前被选中——Spring 按最具体的异常类型匹配，
+     * {@link ConcurrencyFailureException} 比 {@code DataAccessException} 具体，所以会优先命中。</p>
+     *
+     * <p>归 409 而不是 503：并发冲突是两笔业务撞在一起，不是依赖故障。需求 ② 同时写明
+     * 客户端可自动重试 1 次；若沿用 503，网关与客户端会按「暂时不可用」无控重试。</p>
+     *
+     * <p>日志用 warn 不用 error：并发冲突不是故障，用 error 会让告警噪音掩盖真正的依赖不可用。</p>
+     */
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrencyConflict(ConcurrencyFailureException ex) {
+        log.warn("并发冲突 traceId={} type={}", currentTraceId(), ex.getClass().getSimpleName());
+        return build(ErrorCode.CONCURRENT_MODIFICATION, ErrorCode.CONCURRENT_MODIFICATION.getDefaultMessage());
     }
 
     /** 依赖不可用：DataAccessException 覆盖 DB 连不上与 Redis 连不上（父链到 DataAccessResourceFailureException）。 */
