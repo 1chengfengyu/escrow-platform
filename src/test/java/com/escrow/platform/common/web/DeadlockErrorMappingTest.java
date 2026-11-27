@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DeadlockLoserDataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,6 +42,11 @@ class DeadlockErrorMappingTest {
             throw new CannotAcquireLockException("Lock wait timeout exceeded");
         }
 
+        @GetMapping("/boom/optimistic")
+        public Object optimistic() {
+            throw new OptimisticLockingFailureException("Row was updated or deleted by another transaction");
+        }
+
         @GetMapping("/boom/connection")
         public Object connection() {
             throw new DataAccessResourceFailureException("Could not get JDBC Connection");
@@ -63,6 +69,20 @@ class DeadlockErrorMappingTest {
     @Test
     void lockWaitTimeoutShouldMapTo409ConcurrentModification() throws Exception {
         mvc().perform(get("/boom/cannot-acquire"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
+    }
+
+    /**
+     * 需求 ② 的前半句：乐观锁版本冲突同样归 409。
+     *
+     * <p>乐观锁拦截器当前未启用（FundAccount.java:20 注明「v2-c5 接」），这条用例覆盖的是
+     * 接上之后的行为。它现在也是红的，因为 {@code OptimisticLockingFailureException}
+     * 同样落在 {@code DataAccessException} 下。</p>
+     */
+    @Test
+    void optimisticLockConflictShouldMapTo409ConcurrentModification() throws Exception {
+        mvc().perform(get("/boom/optimistic"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CONCURRENT_MODIFICATION"));
     }
