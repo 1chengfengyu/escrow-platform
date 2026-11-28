@@ -137,16 +137,17 @@ class FundAccountServiceTest {
         FundAccount issued = account(33L, AccountSubject.ACC_ISSUED, 0L);
         when(fundAccountMapper.selectOne(any())).thenReturn(avail, issued, avail, null);
         when(fundAccountMapper.update(any(), any())).thenReturn(1);
+        when(journalService.postIfAbsent(any(), any(), any(), any(), any(), any())).thenReturn(true);
 
-        FundBalanceView view = fundAccountService.recharge(1001L, 5000L);
+        FundBalanceView view = fundAccountService.recharge(1001L, "rid-recharge-1", 5000L);
 
         assertThat(view.available()).isEqualTo(5000L);
         assertThat(view.frozen()).isZero();
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<JournalService.EntryDraft>> captor = ArgumentCaptor.forClass(List.class);
-        verify(journalService).post(eq(JournalBizType.RECHARGE), any(), eq(JournalEventType.ACCOUNT_ISSUE),
-                eq(JournalTriggerType.USER), any(), captor.capture());
+        verify(journalService).postIfAbsent(eq(JournalBizType.RECHARGE), eq("rid-recharge-1"),
+                eq(JournalEventType.ACCOUNT_ISSUE), eq(JournalTriggerType.USER), any(), captor.capture());
         assertThat(captor.getValue()).hasSize(2);
         assertThat(captor.getValue().get(0).subject()).isEqualTo(AccountSubject.ACC_ISSUED);
         assertThat(captor.getValue().get(0).direction()).isEqualTo(JournalDirection.DEBIT);
@@ -154,10 +155,49 @@ class FundAccountServiceTest {
         assertThat(captor.getValue().get(1).direction()).isEqualTo(JournalDirection.CREDIT);
     }
 
+    /**
+     * 幂等命中：占位失败时就一分钱不动。
+     *
+     * <p>这条是「先占位后搬钱」的主判据：只把 bizNo 换成固定值、却把 increase 留在
+     * post 之前的实现，批次断言会绿而这条会红。</p>
+     */
+    @Test
+    void rechargeShouldNotTouchBalanceWhenJournalAlreadyPosted() {
+        FundAccount avail = account(11L, AccountSubject.ACC_AVAIL, 5000L);
+        FundAccount issued = account(33L, AccountSubject.ACC_ISSUED, 0L);
+        when(fundAccountMapper.selectOne(any())).thenReturn(avail, issued, avail, null);
+        when(journalService.postIfAbsent(any(), any(), any(), any(), any(), any())).thenReturn(false);
+
+        fundAccountService.recharge(1001L, "rid-dup", 5000L);
+
+        verify(fundAccountMapper, never()).update(any(), any());
+        verify(fundLedgerGuard, never()).assertBalanced(any(), any());
+    }
+
+    /** 不同 requestId 是两笔独立意图：每次都要真正占位，且幂等键原样透传不被改写。 */
+    @Test
+    void differentRequestIdsShouldPostTwice() {
+        FundAccount avail = account(11L, AccountSubject.ACC_AVAIL, 5000L);
+        FundAccount issued = account(33L, AccountSubject.ACC_ISSUED, 0L);
+        when(fundAccountMapper.selectOne(any()))
+                .thenReturn(avail, issued, avail, null, avail, issued, avail, null);
+        when(fundAccountMapper.update(any(), any())).thenReturn(1);
+        when(journalService.postIfAbsent(any(), any(), any(), any(), any(), any())).thenReturn(true);
+
+        fundAccountService.recharge(1001L, "rid-a", 5000L);
+        fundAccountService.recharge(1001L, "rid-b", 5000L);
+
+        ArgumentCaptor<String> bizNo = ArgumentCaptor.forClass(String.class);
+        verify(journalService, times(2))
+                .postIfAbsent(any(), bizNo.capture(), any(), any(), any(), any());
+        assertThat(bizNo.getAllValues()).containsExactly("rid-a", "rid-b");
+        verify(fundAccountMapper, times(4)).update(any(), any());
+    }
+
     /** 超过单笔上限：409 RECHARGE_LIMIT_EXCEEDED，不碰数据库。 */
     @Test
     void rechargeAboveLimitShouldBeRejected() {
-        assertThatThrownBy(() -> fundAccountService.recharge(1001L,
+        assertThatThrownBy(() -> fundAccountService.recharge(1001L, "rid-limit",
                 FundAccountService.MAX_RECHARGE_AMOUNT + 1))
                 .isInstanceOfSatisfying(ApiException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.RECHARGE_LIMIT_EXCEEDED));
@@ -167,7 +207,7 @@ class FundAccountServiceTest {
     /** 非正金额：400 INVALID_PARAMETER。 */
     @Test
     void rechargeWithNonPositiveAmountShouldBeRejected() {
-        assertThatThrownBy(() -> fundAccountService.recharge(1001L, 0L))
+        assertThatThrownBy(() -> fundAccountService.recharge(1001L, "rid-zero", 0L))
                 .isInstanceOfSatisfying(ApiException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_PARAMETER));
         verifyNoInteractions(fundAccountMapper, journalService);
@@ -176,11 +216,11 @@ class FundAccountServiceTest {
     /** 未登录：401 UNAUTHENTICATED（Controller 的兜底之外再加一道）。 */
     @Test
     void rechargeWithoutUserShouldBeRejected() {
-        assertThatThrownBy(() -> fundAccountService.recharge(null, 100L))
+        assertThatThrownBy(() -> fundAccountService.recharge(null, "rid-noauth", 100L))
                 .isInstanceOfSatisfying(ApiException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UNAUTHENTICATED));
         verify(fundAccountMapper, never()).update(any(), any());
-        verify(journalService, never()).post(any(), any(), any(), any(), any(), any());
+        verify(journalService, never()).postIfAbsent(any(), any(), any(), any(), any(), any());
     }
 
     private static FundAccount account(Long id, AccountSubject subject, long balance) {

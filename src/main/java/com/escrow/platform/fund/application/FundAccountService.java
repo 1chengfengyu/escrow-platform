@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * 资金账户读写与模拟充值（FR-WALLET.ISSUE.01 / RECHARGE.01~.02，FR-ESCROW.HOLD.01~.04）。
@@ -223,14 +222,19 @@ public class FundAccountService {
      * <p>只校验单笔 ≤ 50,000 元；V2 不做单日累计限额（用户裁决 6A）。
      * 必须写流水，否则 V6 对账的「发行总额 = Σ 用户余额」恒等式对不上。</p>
      *
-     * @param userId 用户 ID
-     * @param amount 充值金额（分）
+     * <p>顺序是「先占位、后搬钱」：{@code postIfAbsent} 占不上位说明同一笔充值已经
+     * 记过账，此时直接返回、一分钱不动。若反过来先 {@code increase} 再记账，撞键只会让
+     * {@code post} 正常返回（它是幂等返回，不抛异常、不回滚），钱已经加了两次而凭证只有一条。</p>
+     *
+     * @param userId    用户 ID
+     * @param requestId 幂等键，1~32 字符；同一笔充值意图的重试必须复用同一个值
+     * @param amount    充值金额（分）
      * @return 充值后的余额视图
      * @throws ApiException 400 {@code INVALID_PARAMETER} 金额非正；
      *                      409 {@code RECHARGE_LIMIT_EXCEEDED} 超过单笔限额
      */
     @Transactional
-    public FundBalanceView recharge(Long userId, long amount) {
+    public FundBalanceView recharge(Long userId, String requestId, long amount) {
         if (userId == null) {
             throw new ApiException(ErrorCode.UNAUTHENTICATED, UNAUTHENTICATED_MESSAGE);
         }
@@ -239,14 +243,13 @@ public class FundAccountService {
             throw new ApiException(ErrorCode.RECHARGE_LIMIT_EXCEEDED, RECHARGE_LIMIT_MESSAGE);
         }
 
+        // 分录要 accountId，所以两个账户必须先拿到；这两个调用只建空账户，不动余额
         FundAccount avail = getOrCreateUserAccount(userId, AccountSubject.ACC_AVAIL);
         FundAccount issued = getOrCreateSystemAccount(AccountSubject.ACC_ISSUED);
-        increase(avail.getId(), amount);
-        increase(issued.getId(), amount);
 
-        journalService.post(
+        boolean posted = journalService.postIfAbsent(
                 JournalBizType.RECHARGE,
-                UUID.randomUUID().toString().replace("-", ""),
+                requestId,
                 JournalEventType.ACCOUNT_ISSUE,
                 JournalTriggerType.USER,
                 "模拟充值",
@@ -255,7 +258,19 @@ public class FundAccountService {
                                 JournalDirection.DEBIT, amount),
                         new JournalService.EntryDraft(avail.getId(), AccountSubject.ACC_AVAIL,
                                 JournalDirection.CREDIT, amount)));
+        if (!posted) {
+            // 幂等命中：本次没有产生新的资金变动，余额保持原样
+            return balances(userId);
+        }
 
+        // 余额变动的顺序与上面分录的顺序一致：先发行总额、后用户可用。
+        // 两者对齐后，读代码不必在「分录怎么记」和「余额怎么动」之间来回换算。
+        //
+        // 代价是所有充值都会先拿 ACC_ISSUED 这只系统账户的行锁，形成串行点。
+        // 充值不在高频路径上（V2 明确不做单日累计限额），这点争抢可以接受；
+        // 若将来充值变成热点，应改回「先用户、后系统」，让争抢落在用户各自的账户行上。
+        increase(issued.getId(), amount);
+        increase(avail.getId(), amount);
         fundLedgerGuard.assertBalanced("RECHARGE", "userId=" + userId);
         return balances(userId);
     }
@@ -494,10 +509,20 @@ public class FundAccountService {
         }
     }
 
+    /**
+     * 余额入账。
+     *
+     * <p>必须校验影响行数：{@code balance = balance + n} 没有 {@code ge} 条件，
+     * 账户 ID 传错或账户被删时会静默影响 0 行。而两个科目同时漏加时总账恒等式仍然成立，
+     * {@link FundLedgerGuard} 看不出来——这就是它不再报错的原因。</p>
+     */
     private void increase(Long accountId, long amount) {
-        fundAccountMapper.update(null, new LambdaUpdateWrapper<FundAccount>()
+        int rows = fundAccountMapper.update(null, new LambdaUpdateWrapper<FundAccount>()
                 .eq(FundAccount::getId, accountId)
                 .setSql("balance = balance + " + amount));
+        if (rows != 1) {
+            throw new IllegalStateException("余额入账失败，accountId=" + accountId + " rows=" + rows);
+        }
     }
 
     private static void requirePositive(long amount) {

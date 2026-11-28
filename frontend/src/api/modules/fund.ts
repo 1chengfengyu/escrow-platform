@@ -5,7 +5,11 @@ export const fundApi = {
   balance() {
     return api<FundBalanceView>({ url: '/api/fund/accounts/me', method: 'get' })
   },
-  recharge(amount: number) {
-    return api<FundBalanceView>({ url: '/api/fund/recharge', method: 'post', data: { amount } })
+  recharge(amount: number, requestId: string) {
+    return api<FundBalanceView>({
+      url: '/api/fund/recharge',
+      method: 'post',
+      data: { amount, requestId },
+    })
   },
 }

@@ -346,7 +346,7 @@ class V4AcceptanceSettlementIntegrationTest {
     // ==================== 场景搭建 ====================
 
     private Long publishTask(int slotCount) {
-        fundAccountService.recharge(OWNER_ID, 10_000L);
+        fundAccountService.recharge(OWNER_ID, "SETUP-" + System.nanoTime(), 10_000L);
         Task task = new Task();
         task.setEmployerId(OWNER_ID);
         task.setTitle("V4 验收结算测试任务-" + System.nanoTime());

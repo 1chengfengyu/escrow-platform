@@ -22,6 +22,22 @@ const recharging = ref(false)
 const rechargeError = ref<ApiError | null>(null)
 const lastRecharge = ref('')
 
+// 幂等键标识「这一笔充值意图」，不是「这一次点击」：
+// 成功后换新的，失败保持不变——用户点重试时仍是同一笔，服务端才认得出是重复提交。
+//
+// 已知边界：失败后若改了金额再提交，requestId 仍是同一个，服务端当作同一笔意图、
+// 直接返回余额，新金额被忽略（不会多充，但也不会按新金额充）。
+// 不在这里主动换键，是因为换了之后「超时但服务端其实已成功」的那次重试会变成第二笔充值。
+// 两害相权取轻：宁可让用户重试后看到余额没变，也不重复扣款。
+function newRequestId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  // http + 内网 IP 属于非安全上下文，没有 randomUUID，退化成时间戳加随机串，仍在 32 字符以内
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+const requestId = ref(newRequestId())
+
 const canRecharge = computed(() => {
   const fen = yuanToFen(amountYuan.value)
   return fen !== null && fen > 0
@@ -37,7 +53,8 @@ async function recharge(): Promise<void> {
   recharging.value = true
   rechargeError.value = null
   try {
-    const balance = await fundApi.recharge(fen)
+    const balance = await fundApi.recharge(fen, requestId.value)
+    requestId.value = newRequestId()
     amountYuan.value = ''
     lastRecharge.value = String(fen)
     message.success('模拟充值成功')

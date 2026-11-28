@@ -164,7 +164,7 @@ class V5AmountMismatchIntegrationTest {
     }
 
     private Long publishTask() {
-        fundAccountService.recharge(OWNER_ID, 10_000L);
+        fundAccountService.recharge(OWNER_ID, "SETUP-" + System.nanoTime(), 10_000L);
         Task task = new Task();
         task.setEmployerId(OWNER_ID);
         task.setTitle("V5 金额不一致测试任务-" + System.nanoTime());

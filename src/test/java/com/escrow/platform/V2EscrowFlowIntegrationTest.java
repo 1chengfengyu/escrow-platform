@@ -106,7 +106,7 @@ class V2EscrowFlowIntegrationTest {
     /** P1：发布 2 个名额 → 2 名额 + 1 托管单 + 2 明细 + 借贷相等 + 余额搬运。 */
     @Test
     void publishShouldFreezeSlotsAndBalanceJournal() {
-        fundAccountService.recharge(EMPLOYER_ID, 20_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 20_000L);
         Long taskId = insertDraftTask(2, 5_000L, LocalDateTime.now().plusDays(2));
 
         taskPublishService.publish(EMPLOYER, taskId);
@@ -149,7 +149,7 @@ class V2EscrowFlowIntegrationTest {
     /** P4：同任务连打 5 次发布 → 名额 / 托管单 / 明细 / 批次都只有一份。 */
     @Test
     void publishShouldBeIdempotent() {
-        fundAccountService.recharge(EMPLOYER_ID, 20_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 20_000L);
         Long taskId = insertDraftTask(2, 5_000L, LocalDateTime.now().plusDays(2));
 
         for (int i = 0; i < 5; i++) {
@@ -168,7 +168,7 @@ class V2EscrowFlowIntegrationTest {
     /** P2：余额不足 → 名额 / 托管单 / 明细 / 批次全部为 0，余额不变。 */
     @Test
     void publishWithoutEnoughBalanceShouldRollbackEverything() {
-        fundAccountService.recharge(EMPLOYER_ID, 5_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 5_000L);
         Long taskId = insertDraftTask(2, 5_000L, LocalDateTime.now().plusDays(2));
 
         assertThatThrownBy(() -> taskPublishService.publish(EMPLOYER, taskId))
@@ -191,7 +191,7 @@ class V2EscrowFlowIntegrationTest {
     /** P3：两线程争最后一份余额，成功数 = 1，另一笔必须 INSUFFICIENT_BALANCE。 */
     @Test
     void concurrentPublishShouldOnlySucceedOnce() throws Exception {
-        fundAccountService.recharge(EMPLOYER_ID, 5_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 5_000L);
         Long first = insertDraftTask(1, 5_000L, LocalDateTime.now().plusDays(2));
         Long second = insertDraftTask(1, 5_000L, LocalDateTime.now().plusDays(2));
 
@@ -220,7 +220,7 @@ class V2EscrowFlowIntegrationTest {
     /** 撤单：全额退款 + 名额释放 + 托管单关闭；重复撤单不重复退款。 */
     @Test
     void cancelShouldRefundReleaseAndBeIdempotent() {
-        fundAccountService.recharge(EMPLOYER_ID, 20_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 20_000L);
         Long taskId = insertDraftTask(2, 5_000L, LocalDateTime.now().plusDays(2));
         taskPublishService.publish(EMPLOYER, taskId);
 
@@ -249,7 +249,7 @@ class V2EscrowFlowIntegrationTest {
     /** 到期：收口招募、退款、释放；不写 cancelled_at。 */
     @Test
     void expiryShouldRefundAvailableSlots() {
-        fundAccountService.recharge(EMPLOYER_ID, 20_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 20_000L);
         Long taskId = insertDraftTask(2, 5_000L, LocalDateTime.now().plusDays(2));
         taskPublishService.publish(EMPLOYER, taskId);
 
@@ -278,7 +278,7 @@ class V2EscrowFlowIntegrationTest {
     /** 托管明细在发布后一律为已托管（防止状态机与 DDL 枚举值错位）。 */
     @Test
     void publishedDetailsShouldBeHeld() {
-        fundAccountService.recharge(EMPLOYER_ID, 10_000L);
+        fundAccountService.recharge(EMPLOYER_ID, "SETUP-" + System.nanoTime(), 10_000L);
         Long taskId = insertDraftTask(1, 5_000L, LocalDateTime.now().plusDays(2));
 
         taskPublishService.publish(EMPLOYER, taskId);

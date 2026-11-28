@@ -34,10 +34,14 @@ public class FundRechargeController {
 
     private static final String UNAUTHENTICATED_MESSAGE = "未认证或登录已失效";
     private static final String AMOUNT_REQUIRED_MESSAGE = "充值金额不能为空";
+    private static final String REQUEST_ID_INVALID_MESSAGE = "充值请求标识必须在 1~32 字符之间";
+
+    /** 与 {@code fund_journal_batch.biz_no VARCHAR(32)} 对齐。 */
+    private static final int MAX_REQUEST_ID_LENGTH = 32;
 
     private final FundAccountService fundAccountService;
 
-    /** 模拟充值：返回充值后的余额视图。 */
+    /** 模拟充值：返回充值后的余额视图。同一 {@code requestId} 重试不会重复入账。 */
     @PostMapping("/recharge")
     public ApiResponse<FundBalanceView> recharge(@RequestBody RechargeRequest request,
                                                  @AuthenticationPrincipal LoginUser current) {
@@ -48,6 +52,13 @@ public class FundRechargeController {
             throw new ApiException(ErrorCode.INVALID_PARAMETER, AMOUNT_REQUIRED_MESSAGE,
                     Map.of("fields", Map.of("amount", AMOUNT_REQUIRED_MESSAGE)));
         }
-        return ApiResponse.ok(fundAccountService.recharge(current.userId(), request.amount()));
+        String requestId = request.requestId();
+        if (requestId == null || requestId.isBlank() || requestId.length() > MAX_REQUEST_ID_LENGTH) {
+            // 在这里拦而不是漏到 JournalService.validate：那里抛 IllegalArgumentException，
+            // 会被兜成 500。参数错不该表现成服务器错。
+            throw new ApiException(ErrorCode.INVALID_PARAMETER, REQUEST_ID_INVALID_MESSAGE,
+                    Map.of("fields", Map.of("requestId", REQUEST_ID_INVALID_MESSAGE)));
+        }
+        return ApiResponse.ok(fundAccountService.recharge(current.userId(), requestId, request.amount()));
     }
 }

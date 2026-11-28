@@ -115,6 +115,81 @@ public class JournalService {
     }
 
     /**
+     * 占位记账：撞业务幂等键时返回 {@code false}，不回查、不写分录。
+     *
+     * <p>与 {@link #post} 的分工：{@code post} 撞键后回查既有批次并返回它，适合
+     * 「这笔业务只要记过一次账」；本方法只回答「这次有没有占上位」，适合调用方要
+     * 根据占位结果决定钱要不要动的场景——占上了才搬钱，占不上就一分不动。</p>
+     *
+     * <p>刻意不回查：{@code post} 的回查是快照读，调用方在同一事务里已经做过
+     * SELECT 时（充值要先建账户），RR 下可能读不到并发事务刚提交的批次，查不到
+     * 就把原异常抛出去。本方法不承担这个风险，因为它不关心既有批次长什么样。</p>
+     *
+     * @param bizType     业务类型（幂等键第一段）
+     * @param bizNo       业务单据号（幂等键第二段），≤32 字符
+     * @param eventType   事件模板
+     * @param triggerType 触发方
+     * @param summary     摘要
+     * @param entries     分录草稿，借方合计必须等于贷方合计
+     * @return {@code true} 本次占位成功且分录已写入；{@code false} 该业务号已被占用
+     * @throws IllegalArgumentException 入参不合法或借贷不平（调用方缺陷，不是业务失败）
+     * @since V2
+     */
+    @Transactional
+    public boolean postIfAbsent(JournalBizType bizType, String bizNo, JournalEventType eventType,
+                                JournalTriggerType triggerType, String summary,
+                                List<EntryDraft> entries) {
+        validate(bizType, bizNo, eventType, triggerType, summary, entries);
+
+        FundJournalBatch batch = new FundJournalBatch();
+        batch.setBatchNo(UUID.randomUUID().toString().replace("-", ""));
+        batch.setBizType(bizType);
+        batch.setBizNo(bizNo);
+        batch.setEventType(eventType);
+        batch.setTriggerType(triggerType);
+        batch.setSummary(summary);
+
+        try {
+            fundJournalBatchMapper.insert(batch);
+        } catch (DuplicateKeyException e) {
+            if (!isBizKeyConflict(e)) {
+                // 撞的不是业务幂等键：失败方向是调用方看到一次 500，数据仍然一致
+                throw e;
+            }
+            log.info("凭证批次已占位，本次跳过 bizType={} bizNo={}", bizType, bizNo);
+            return false;
+        }
+
+        for (EntryDraft draft : entries) {
+            FundJournalEntry entry = new FundJournalEntry();
+            entry.setJournalBatchId(batch.getId());
+            entry.setAccountId(draft.accountId());
+            entry.setSubject(draft.subject());
+            entry.setDirection(draft.direction());
+            entry.setAmount(draft.amount());
+            fundJournalEntryMapper.insert(entry);
+        }
+        return true;
+    }
+
+    /**
+     * 唯一键冲突信息里带索引名：{@code Duplicate entry '...' for key '...uk_fund_journal_batch_biz'}。
+     *
+     * <p>依赖驱动输出字符串是刻意的取舍：判错时后果是「本该幂等命中却抛异常」，
+     * 用户看到一次 500，但事务回滚、余额不会被多加。为绕开这层依赖去改
+     * {@code batch_no} 的生成规则，影响面远大于收益。</p>
+     *
+     * <p>失效方向是刻意选的：若将来升级 MySQL 驱动、或换库导致 message 格式变化，
+     * 症状会是「幂等命中变成 500」，而不是资金出错。前者是可见的、可修的，后者不是。
+     * 这也意味着这条判断必须配集成测试兜底（{@code RechargeIdempotencyIntegrationTest}），
+     * 否则驱动悄悄改格式时，只有线上重试才会暴露。</p>
+     */
+    private static boolean isBizKeyConflict(DuplicateKeyException e) {
+        String message = e.getMessage();
+        return message != null && message.contains("uk_fund_journal_batch_biz");
+    }
+
+    /**
      * 提交前校验：幂等键可落库、金额合法、借贷相等。
      *
      * <p>借贷不相等是程序员错误（分录模板写错），抛 {@link IllegalArgumentException}
